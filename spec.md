@@ -1,6 +1,6 @@
 # Project: LiftLog
 **Vibe:** Aesthetic, modern, practical.
-**Tech Stack:** React Native, NativeWind, ExpoRouter, Supabase.
+**Tech Stack:** React Native, NativeWind, ExpoRouter, Supabase, WatermelonDB.
 
 ## Core Functional Requirements
 - **User Authentication:** User must be able to sign up, sign in, and sign out. User should stay signed in, even when the app closes and should 
@@ -12,6 +12,8 @@
 ## Success Metrics
 - Users should be easily log in and intuitively track their workouts and progress over time.
 - Code should be optimized, modular, readable, and scalable.
+- App should be aesthetically pleasing, not look vibe coded, and easy to navigate.
+- App should be able to run offline and sync data when the user regains internet connectivity.
 
 ## Future Features
 - **Form Review through Video Upload:** Users should be able to upload videos of their lifts, which will be analyzed by machine learning algorithms to provide feedback on their form.
