@@ -1,17 +1,20 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { View, Text, ScrollView, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../providers/AuthProvider";
 import { useWorkout } from "../hooks/useWorkout";
+import { useWorkoutContext } from "../providers/WorkoutProvider";
 import { useNetworkStatus } from "../hooks/useNetworkStatus";
 import { useTemplates } from "../hooks/useTemplates";
-import { getWorkoutSets } from "../services/workouts";
+import { getWorkoutSets, getSetsForExercise } from "../services/workouts";
+import { getActiveParties } from "../services/social";
+import { getBest1RM } from "../services/progress";
 import { database } from "../db";
 import Button from "../components/ui/Button";
 import ExerciseCard from "../components/workout/ExerciseCard";
 import ExercisePicker from "../components/workout/ExercisePicker";
-import RestTimer from "../components/workout/RestTimer";
+import RestTimer, { RestTimerHandle } from "../components/workout/RestTimer";
 import TemplatePicker from "../components/workout/TemplatePicker";
 import TemplateEditor from "../components/workout/TemplateEditor";
 
@@ -19,6 +22,15 @@ interface SelectedExercise {
   id: string;
   name: string;
   muscleGroup: string;
+}
+
+interface PreviousSetData {
+  id: string;
+  setNumber: number;
+  weight: number;
+  reps: number;
+  rpe?: number | null;
+  calculated1RM?: number | null;
 }
 
 export default function HomeScreen() {
@@ -33,8 +45,11 @@ export default function HomeScreen() {
     removeSet,
     sets,
     exerciseSets,
+    activePartyId,
   } = useWorkout();
+  const { setActivePartyId } = useWorkoutContext();
   const { templates, createTemplate } = useTemplates();
+  const restTimerRef = useRef<RestTimerHandle>(null);
 
   const [showPicker, setShowPicker] = useState(false);
   const [showTemplatePicker, setShowTemplatePicker] = useState(false);
@@ -42,6 +57,11 @@ export default function HomeScreen() {
   const [exercises, setExercises] = useState<Map<string, SelectedExercise>>(
     new Map()
   );
+  const [activePartyName, setActivePartyName] = useState<string | null>(null);
+  const [previousSetsMap, setPreviousSetsMap] = useState<
+    Record<string, PreviousSetData[]>
+  >({});
+  const [best1RMMap, setBest1RMMap] = useState<Record<string, number>>({});
 
   // Recover exercises when an active workout is restored
   useEffect(() => {
@@ -75,15 +95,80 @@ export default function HomeScreen() {
 
       if (newMap.size > 0) {
         setExercises(newMap);
+        // Also load previous sets for recovered exercises
+        for (const id of exerciseIds) {
+          loadPreviousSets(id);
+        }
       }
     } catch (error) {
       console.error("Failed to recover exercises:", error);
     }
   };
 
-  const handleStartWorkout = async () => {
+  const loadPreviousSets = async (exerciseId: string) => {
     try {
+      const [prevSets, best] = await Promise.all([
+        getSetsForExercise(exerciseId),
+        getBest1RM(exerciseId),
+      ]);
+      const mapped = prevSets.slice(0, 5).map((s: any) => ({
+        id: s.id,
+        setNumber: s.set_number,
+        weight: s.weight,
+        reps: s.reps,
+        rpe: s.rpe,
+        calculated1RM: s.calculated_1rm,
+      }));
+      setPreviousSetsMap((prev) => ({ ...prev, [exerciseId]: mapped }));
+      if (best > 0) {
+        setBest1RMMap((prev) => ({ ...prev, [exerciseId]: best }));
+      }
+    } catch (error) {
+      console.error("Failed to load previous sets:", error);
+    }
+  };
+
+  const beginWorkout = async (partyId?: string, partyName?: string) => {
+    try {
+      if (partyId) {
+        setActivePartyId(partyId);
+        setActivePartyName(partyName || null);
+      } else {
+        setActivePartyId(null);
+        setActivePartyName(null);
+      }
       await startWorkout();
+    } catch (error: any) {
+      Alert.alert("Error", error.message);
+    }
+  };
+
+  const handleStartWorkout = async () => {
+    if (!user) return;
+    try {
+      // Check for active parties
+      const parties = await getActiveParties(user.id);
+      const active = (parties || []).filter((p: any) => p.parties?.is_active);
+
+      if (active.length > 0) {
+        const buttons: any[] = active.map((p: any) => ({
+          text: p.parties?.name || "Party",
+          onPress: () => beginWorkout(p.party_id, p.parties?.name),
+        }));
+        buttons.push({
+          text: "Solo (No Party)",
+          onPress: () => beginWorkout(),
+        });
+        buttons.push({ text: "Cancel", style: "cancel" });
+
+        Alert.alert(
+          "Log for a Party?",
+          "Select a party to compete in, or work out solo.",
+          buttons
+        );
+      } else {
+        await beginWorkout();
+      }
     } catch (error: any) {
       Alert.alert("Error", error.message);
     }
@@ -104,6 +189,7 @@ export default function HomeScreen() {
             name: (exercise as any).name,
             muscleGroup: (exercise as any).muscle_group,
           });
+          loadPreviousSets(id);
         }
       }
 
@@ -124,7 +210,11 @@ export default function HomeScreen() {
           onPress: async () => {
             try {
               await finishWorkout();
+              setActivePartyId(null);
+              setActivePartyName(null);
               setExercises(new Map());
+              setPreviousSetsMap({});
+              setBest1RMMap({});
             } catch (error: any) {
               Alert.alert("Error", error.message);
             }
@@ -134,8 +224,9 @@ export default function HomeScreen() {
     );
   };
 
-  const handleSelectExercise = (exercise: SelectedExercise) => {
+  const handleSelectExercise = async (exercise: SelectedExercise) => {
     setExercises((prev) => new Map(prev).set(exercise.id, exercise));
+    loadPreviousSets(exercise.id);
   };
 
   const handleAddSet = async (
@@ -146,6 +237,11 @@ export default function HomeScreen() {
   ) => {
     const exerciseSetCount = (exerciseSets[exerciseId] || []).length;
     await addSet(exerciseId, exerciseSetCount + 1, weight, reps, rpe);
+  };
+
+  const handleSetSaved = () => {
+    // Auto-start rest timer after logging a set
+    restTimerRef.current?.triggerStart();
   };
 
   const handleSaveTemplate = async (name: string, exerciseIds: string[]) => {
@@ -159,7 +255,7 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-dark-900">
-      <ScrollView className="flex-1 px-4">
+      <ScrollView className="flex-1 px-4" keyboardShouldPersistTaps="handled">
         {/* Header */}
         <View className="flex-row items-center justify-between py-4">
           <View>
@@ -229,7 +325,18 @@ export default function HomeScreen() {
         {/* Active workout */}
         {isWorkoutActive && (
           <>
-            <RestTimer />
+            {/* Active party indicator */}
+            {activePartyId && (
+              <View className="bg-primary-600/20 px-3 py-2 rounded-xl mb-3 flex-row items-center">
+                <Ionicons name="people" size={16} color="#818CF8" />
+                <Text className="text-primary-400 text-sm font-semibold ml-2">
+                  Logging for {activePartyName || "party"} — sets are being
+                  scored!
+                </Text>
+              </View>
+            )}
+
+            <RestTimer ref={restTimerRef} />
 
             <View className="mt-4">
               {Array.from(exercises.values()).map((exercise) => {
@@ -250,11 +357,14 @@ export default function HomeScreen() {
                     exerciseName={exercise.name}
                     muscleGroup={exercise.muscleGroup}
                     sets={setsForExercise}
+                    previousSets={previousSetsMap[exercise.id]}
+                    best1RM={best1RMMap[exercise.id]}
                     isActive
                     onAddSet={(weight, reps, rpe) =>
                       handleAddSet(exercise.id, weight, reps, rpe)
                     }
                     onDeleteSet={(setId) => removeSet(setId)}
+                    onSetSaved={handleSetSaved}
                   />
                 );
               })}

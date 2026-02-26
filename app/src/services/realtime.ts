@@ -78,3 +78,29 @@ export function subscribeToFriendRequests(
     supabase.removeChannel(channel);
   };
 }
+
+/**
+ * Subscribe to incoming party invitations.
+ */
+export function subscribeToPartyInvites(
+  userId: string,
+  callback: (payload: any) => void
+) {
+  const channel = supabase
+    .channel(`party-invites-${userId}`)
+    .on(
+      "postgres_changes",
+      {
+        event: "INSERT",
+        schema: "public",
+        table: "party_invites",
+        filter: `invited_user=eq.${userId}`,
+      },
+      callback
+    )
+    .subscribe();
+
+  return () => {
+    supabase.removeChannel(channel);
+  };
+}

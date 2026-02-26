@@ -47,3 +47,14 @@ export interface PartyWithMembers {
   party: Party;
   members: PartyMember[];
 }
+
+export type PartyInviteStatus = 'pending' | 'accepted' | 'declined';
+
+export interface PartyInvite {
+  id: string;
+  partyId: string;
+  invitedBy: string;
+  invitedUser: string;
+  status: PartyInviteStatus;
+  createdAt: string;
+}

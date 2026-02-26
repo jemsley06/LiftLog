@@ -5,10 +5,15 @@ import {
   endParty,
   getActiveParties,
   getPartyMembers,
+  sendPartyInvites,
+  acceptPartyInvite,
+  declinePartyInvite,
+  getPendingPartyInvites,
 } from "../services/social";
 import {
   subscribeToPartyScores,
   subscribeToPartyStatus,
+  subscribeToPartyInvites,
 } from "../services/realtime";
 import { useAuth } from "../providers/AuthProvider";
 
@@ -16,6 +21,7 @@ export function useParty(partyId?: string) {
   const { user } = useAuth();
   const [activeParties, setActiveParties] = useState<any[]>([]);
   const [members, setMembers] = useState<any[]>([]);
+  const [pendingInvites, setPendingInvites] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
 
   // Load active parties
@@ -43,6 +49,17 @@ export function useParty(partyId?: string) {
     }
   }, [partyId]);
 
+  // Load pending invites
+  const refreshInvites = useCallback(async () => {
+    if (!user) return;
+    try {
+      const data = await getPendingPartyInvites(user.id);
+      setPendingInvites(data || []);
+    } catch (error) {
+      console.error("Failed to load party invites:", error);
+    }
+  }, [user?.id]);
+
   useEffect(() => {
     refreshParties();
   }, [refreshParties]);
@@ -50,6 +67,10 @@ export function useParty(partyId?: string) {
   useEffect(() => {
     refreshMembers();
   }, [refreshMembers]);
+
+  useEffect(() => {
+    refreshInvites();
+  }, [refreshInvites]);
 
   // Real-time score updates
   useEffect(() => {
@@ -69,6 +90,15 @@ export function useParty(partyId?: string) {
     });
     return unsubscribe;
   }, [partyId, refreshParties, refreshMembers]);
+
+  // Real-time invite notifications
+  useEffect(() => {
+    if (!user) return;
+    const unsubscribe = subscribeToPartyInvites(user.id, () => {
+      refreshInvites();
+    });
+    return unsubscribe;
+  }, [user?.id, refreshInvites]);
 
   const create = useCallback(
     async (name: string) => {
@@ -97,14 +127,45 @@ export function useParty(partyId?: string) {
     [refreshParties]
   );
 
+  const invite = useCallback(
+    async (targetPartyId: string, friendIds: string[]) => {
+      if (!user) return;
+      await sendPartyInvites(targetPartyId, user.id, friendIds);
+    },
+    [user?.id]
+  );
+
+  const acceptInvite = useCallback(
+    async (inviteId: string) => {
+      if (!user) return;
+      await acceptPartyInvite(inviteId, user.id);
+      await refreshInvites();
+      await refreshParties();
+    },
+    [user?.id, refreshInvites, refreshParties]
+  );
+
+  const declineInvite = useCallback(
+    async (inviteId: string) => {
+      await declinePartyInvite(inviteId);
+      await refreshInvites();
+    },
+    [refreshInvites]
+  );
+
   return {
     activeParties,
     members,
+    pendingInvites,
     loading,
     refreshParties,
     refreshMembers,
+    refreshInvites,
     createParty: create,
     joinParty: join,
     endParty: end,
+    inviteFriends: invite,
+    acceptInvite,
+    declineInvite,
   };
 }

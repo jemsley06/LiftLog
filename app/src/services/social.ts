@@ -140,7 +140,9 @@ export async function getActiveParties(userId: string) {
     .select(`
       party_id,
       score,
-      parties(id, name, created_by, started_at, is_active)
+      parties(id, name, created_by, started_at, is_active,
+        party_members(count)
+      )
     `)
     .eq("user_id", userId)
     .eq("parties.is_active", true);
@@ -177,6 +179,71 @@ export async function getPartyHistory(userId: string) {
     .eq("user_id", userId)
     .eq("parties.is_active", false)
     .order("parties(ended_at)", { ascending: false });
+
+  if (error) throw error;
+  return data;
+}
+
+// ─── Party Invites ───
+
+export async function sendPartyInvites(
+  partyId: string,
+  invitedBy: string,
+  friendIds: string[]
+) {
+  const rows = friendIds.map((id) => ({
+    party_id: partyId,
+    invited_by: invitedBy,
+    invited_user: id,
+    status: "pending",
+  }));
+  const { error } = await supabase.from("party_invites").insert(rows);
+  if (error) throw error;
+}
+
+export async function acceptPartyInvite(inviteId: string, userId: string) {
+  const { data: invite, error: updateError } = await supabase
+    .from("party_invites")
+    .update({ status: "accepted" })
+    .eq("id", inviteId)
+    .select("party_id")
+    .single();
+
+  if (updateError) throw updateError;
+
+  // Auto-join the party
+  const { error: joinError } = await supabase.from("party_members").insert({
+    party_id: invite.party_id,
+    user_id: userId,
+    score: 0,
+  });
+
+  if (joinError) throw joinError;
+}
+
+export async function declinePartyInvite(inviteId: string) {
+  const { error } = await supabase
+    .from("party_invites")
+    .update({ status: "declined" })
+    .eq("id", inviteId);
+
+  if (error) throw error;
+}
+
+export async function getPendingPartyInvites(userId: string) {
+  const { data, error } = await supabase
+    .from("party_invites")
+    .select(`
+      id,
+      party_id,
+      invited_by,
+      status,
+      created_at,
+      parties(id, name, created_by, is_active),
+      inviter:profiles!party_invites_invited_by_fkey(id, username, avatar_url)
+    `)
+    .eq("invited_user", userId)
+    .eq("status", "pending");
 
   if (error) throw error;
   return data;

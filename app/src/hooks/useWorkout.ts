@@ -1,6 +1,9 @@
 import { useState, useEffect, useCallback } from "react";
 import { useWorkoutContext } from "../providers/WorkoutProvider";
 import { getWorkoutSets } from "../services/workouts";
+import { scoreSetForParty } from "../services/partyScoring";
+import { useAuth } from "../providers/AuthProvider";
+import { calculate1RM } from "../utils/calculations";
 
 interface SetData {
   id: string;
@@ -20,6 +23,7 @@ interface SetData {
  */
 export function useWorkout() {
   const context = useWorkoutContext();
+  const { user } = useAuth();
   const [sets, setSets] = useState<SetData[]>([]);
 
   const refreshSets = useCallback(async () => {
@@ -43,7 +47,7 @@ export function useWorkout() {
     return acc;
   }, {});
 
-  // Wrap addSet to auto-refresh
+  // Wrap addSet to auto-refresh and score for party
   const addSet = async (
     exerciseId: string,
     setNumber: number,
@@ -53,6 +57,18 @@ export function useWorkout() {
   ) => {
     const result = await context.addSet(exerciseId, setNumber, weight, reps, rpe);
     await refreshSets();
+
+    // If in a party, score this set
+    if (context.activePartyId && user) {
+      const calculated1rm = calculate1RM(weight, reps);
+      scoreSetForParty(
+        exerciseId,
+        calculated1rm,
+        user.id,
+        context.activePartyId
+      ).catch((err) => console.error("Party scoring failed:", err));
+    }
+
     return result;
   };
 

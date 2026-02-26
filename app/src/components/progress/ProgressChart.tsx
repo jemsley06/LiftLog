@@ -13,6 +13,11 @@ interface ProgressChartProps {
   data: DataPoint[];
   unit?: string;
   color?: string;
+  label?: string;
+  secondaryData?: DataPoint[];
+  secondaryColor?: string;
+  secondaryLabel?: string;
+  secondaryUnit?: string;
 }
 
 export default function ProgressChart({
@@ -20,6 +25,11 @@ export default function ProgressChart({
   data,
   unit = "lbs",
   color = "#6366F1",
+  label,
+  secondaryData,
+  secondaryColor = "#22C55E",
+  secondaryLabel,
+  secondaryUnit,
 }: ProgressChartProps) {
   if (data.length < 2) {
     return (
@@ -41,17 +51,38 @@ export default function ProgressChart({
     return `${date.getMonth() + 1}/${date.getDate()}`;
   });
 
+  const datasets: any[] = [
+    {
+      data: displayData.map((d) => d.value),
+      color: () => color,
+      strokeWidth: 2,
+    },
+  ];
+
+  // Add secondary dataset if provided
+  const hasDual = secondaryData && secondaryData.length >= 2;
+  if (hasDual) {
+    const secondaryDisplay = secondaryData.slice(-10);
+    datasets.push({
+      data: secondaryDisplay.map((d) => d.value),
+      color: () => secondaryColor,
+      strokeWidth: 2,
+    });
+  }
+
+  const showLegend = hasDual && (label || secondaryLabel);
+
   return (
     <Card className="mb-3" padding="sm">
       <Text className="text-white text-base font-bold mb-3 px-2">{title}</Text>
       <LineChart
         data={{
           labels,
-          datasets: [{ data: displayData.map((d) => d.value) }],
+          datasets,
         }}
         width={screenWidth}
         height={200}
-        yAxisSuffix={` ${unit}`}
+        yAxisSuffix={hasDual ? "" : ` ${unit}`}
         chartConfig={{
           backgroundColor: "#1E293B",
           backgroundGradientFrom: "#1E293B",
@@ -62,7 +93,6 @@ export default function ProgressChart({
           propsForDots: {
             r: "4",
             strokeWidth: "2",
-            stroke: color,
           },
           propsForBackgroundLines: {
             stroke: "#334155",
@@ -72,6 +102,34 @@ export default function ProgressChart({
         bezier
         style={{ borderRadius: 12 }}
       />
+
+      {/* Legend */}
+      {showLegend && (
+        <View className="flex-row items-center justify-center mt-2 gap-4 px-2">
+          {label && (
+            <View className="flex-row items-center">
+              <View
+                style={{ backgroundColor: color }}
+                className="w-3 h-3 rounded-full mr-1.5"
+              />
+              <Text className="text-dark-400 text-xs">
+                {label}{unit ? ` (${unit})` : ""}
+              </Text>
+            </View>
+          )}
+          {secondaryLabel && (
+            <View className="flex-row items-center">
+              <View
+                style={{ backgroundColor: secondaryColor }}
+                className="w-3 h-3 rounded-full mr-1.5"
+              />
+              <Text className="text-dark-400 text-xs">
+                {secondaryLabel}{secondaryUnit ? ` (${secondaryUnit})` : ""}
+              </Text>
+            </View>
+          )}
+        </View>
+      )}
     </Card>
   );
 }

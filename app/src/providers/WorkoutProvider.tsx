@@ -18,6 +18,8 @@ interface ActiveWorkout {
 interface WorkoutContextType {
   activeWorkout: ActiveWorkout | null;
   isWorkoutActive: boolean;
+  activePartyId: string | null;
+  setActivePartyId: (partyId: string | null) => void;
   startWorkout: (name?: string) => Promise<void>;
   finishWorkout: (notes?: string) => Promise<void>;
   cancelWorkout: () => void;
@@ -40,6 +42,8 @@ interface WorkoutContextType {
 const WorkoutContext = createContext<WorkoutContextType>({
   activeWorkout: null,
   isWorkoutActive: false,
+  activePartyId: null,
+  setActivePartyId: () => {},
   startWorkout: async () => {},
   finishWorkout: async () => {},
   cancelWorkout: () => {},
@@ -51,6 +55,7 @@ const WorkoutContext = createContext<WorkoutContextType>({
 export function WorkoutProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   const [activeWorkout, setActiveWorkout] = useState<ActiveWorkout | null>(null);
+  const [activePartyId, setActivePartyId] = useState<string | null>(null);
 
   // Restore active workout on mount / user change
   useEffect(() => {
@@ -127,6 +132,8 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
       value={{
         activeWorkout,
         isWorkoutActive: activeWorkout !== null,
+        activePartyId,
+        setActivePartyId,
         startWorkout,
         finishWorkout,
         cancelWorkout,

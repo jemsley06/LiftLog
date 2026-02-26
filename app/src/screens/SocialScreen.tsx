@@ -10,38 +10,75 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../providers/AuthProvider";
 import { useFriends } from "../hooks/useFriends";
+import { useParty } from "../hooks/useParty";
 import {
   createParty,
   getActiveParties,
   getPartyMembers,
   endParty,
+  getPartyHistory,
 } from "../services/social";
+import { subscribeToPartyScores } from "../services/realtime";
 import Button from "../components/ui/Button";
+import Card from "../components/ui/Card";
 import FriendCard from "../components/social/FriendCard";
 import PartyCard from "../components/social/PartyCard";
 import Leaderboard from "../components/social/Leaderboard";
+import InviteModal from "../components/social/InviteModal";
 import Modal from "../components/ui/Modal";
 import Input from "../components/ui/Input";
 
 type Tab = "friends" | "parties";
 
 function PartyDetail({
+  party,
   partyId,
   currentUserId,
   onEnd,
+  onInvite,
 }: {
+  party: any;
   partyId: string;
   currentUserId: string;
   onEnd: () => void;
+  onInvite: () => void;
 }) {
   const [members, setMembers] = useState<any[]>([]);
 
-  useEffect(() => {
+  const loadMembers = useCallback(() => {
     getPartyMembers(partyId).then((data) => setMembers(data || []));
   }, [partyId]);
 
+  // Initial load
+  useEffect(() => {
+    loadMembers();
+  }, [loadMembers]);
+
+  // Live score updates
+  useEffect(() => {
+    const unsubscribe = subscribeToPartyScores(partyId, () => {
+      loadMembers();
+    });
+    return unsubscribe;
+  }, [partyId, loadMembers]);
+
   return (
     <View className="mb-3">
+      <View className="bg-dark-800 rounded-xl p-3 mb-2">
+        <Text className="text-white text-lg font-bold">
+          {party?.name || "Party"}
+        </Text>
+        <Text className="text-dark-400 text-xs mt-1">
+          Started{" "}
+          {party?.started_at
+            ? new Date(party.started_at).toLocaleString()
+            : "recently"}
+        </Text>
+        <Text className="text-dark-400 text-xs">
+          {members.length} {members.length === 1 ? "member" : "members"}
+        </Text>
+      </View>
+
       <Leaderboard
         entries={members.map((m: any, i: number) => ({
           userId: m.user_id,
@@ -51,13 +88,23 @@ function PartyDetail({
         }))}
         currentUserId={currentUserId}
       />
-      <Button
-        title="End Party"
-        variant="danger"
-        size="sm"
-        onPress={onEnd}
-        className="mt-2"
-      />
+
+      <View className="flex-row mt-2">
+        <Button
+          title="Invite Friends"
+          variant="outline"
+          size="sm"
+          onPress={onInvite}
+          className="flex-1 mr-2"
+        />
+        <Button
+          title="End Party"
+          variant="danger"
+          size="sm"
+          onPress={onEnd}
+          className="flex-1"
+        />
+      </View>
     </View>
   );
 }
@@ -73,6 +120,13 @@ export default function SocialScreen() {
     removeFriend,
   } = useFriends();
 
+  const {
+    pendingInvites,
+    inviteFriends,
+    acceptInvite,
+    declineInvite,
+  } = useParty();
+
   const [tab, setTab] = useState<Tab>("friends");
   const [showAddFriend, setShowAddFriend] = useState(false);
   const [showCreateParty, setShowCreateParty] = useState(false);
@@ -80,6 +134,10 @@ export default function SocialScreen() {
   const [partyName, setPartyName] = useState("");
   const [selectedPartyId, setSelectedPartyId] = useState<string | null>(null);
   const [activeParties, setActiveParties] = useState<any[]>([]);
+  const [invitePartyId, setInvitePartyId] = useState<string | null>(null);
+  const [invitePartyName, setInvitePartyName] = useState("");
+  const [showHistory, setShowHistory] = useState(false);
+  const [partyHistory, setPartyHistory] = useState<any[]>([]);
 
   const loadParties = useCallback(async () => {
     if (!user) return;
@@ -91,9 +149,23 @@ export default function SocialScreen() {
     }
   }, [user?.id]);
 
+  const loadHistory = useCallback(async () => {
+    if (!user) return;
+    try {
+      const data = await getPartyHistory(user.id);
+      setPartyHistory(data || []);
+    } catch (error: any) {
+      console.error("Failed to load party history:", error);
+    }
+  }, [user?.id]);
+
   useEffect(() => {
     if (tab === "parties") loadParties();
   }, [tab, loadParties]);
+
+  useEffect(() => {
+    if (showHistory) loadHistory();
+  }, [showHistory, loadHistory]);
 
   const handleSendFriendRequest = async () => {
     if (!friendUsername.trim()) return;
@@ -113,10 +185,13 @@ export default function SocialScreen() {
   const handleCreateParty = async () => {
     if (!partyName.trim() || !user) return;
     try {
-      await createParty(partyName.trim(), user.id);
-      setPartyName("");
+      const party = await createParty(partyName.trim(), user.id);
       setShowCreateParty(false);
       await loadParties();
+      // Immediately open invite modal for the new party
+      setInvitePartyId(party.id);
+      setInvitePartyName(partyName.trim());
+      setPartyName("");
     } catch (error: any) {
       Alert.alert("Error", error.message);
     }
@@ -137,11 +212,45 @@ export default function SocialScreen() {
     ]);
   };
 
+  const handleInvite = async (friendIds: string[]) => {
+    if (!invitePartyId) return;
+    try {
+      await inviteFriends(invitePartyId, friendIds);
+      Alert.alert("Success", "Invitations sent!");
+    } catch (error: any) {
+      Alert.alert("Error", error.message || "Failed to send invitations.");
+    }
+  };
+
+  const handleAcceptInvite = async (inviteId: string) => {
+    try {
+      await acceptInvite(inviteId);
+      await loadParties();
+    } catch (error: any) {
+      Alert.alert("Error", error.message || "Failed to join party.");
+    }
+  };
+
+  const handleDeclineInvite = async (inviteId: string) => {
+    try {
+      await declineInvite(inviteId);
+    } catch (error: any) {
+      Alert.alert("Error", error.message || "Failed to decline invite.");
+    }
+  };
+
   const getFriendProfile = (friendship: any) => {
     if (friendship.requester?.id === user?.id) {
       return friendship.addressee;
     }
     return friendship.requester;
+  };
+
+  const getInviteFriendsList = () => {
+    return friends.map((f: any) => {
+      const profile = getFriendProfile(f);
+      return { id: profile?.id || "", username: profile?.username || "Unknown" };
+    });
   };
 
   return (
@@ -172,13 +281,22 @@ export default function SocialScreen() {
             tab === "parties" ? "bg-primary-600" : ""
           }`}
         >
-          <Text
-            className={`font-semibold ${
-              tab === "parties" ? "text-white" : "text-dark-400"
-            }`}
-          >
-            Parties
-          </Text>
+          <View className="flex-row items-center">
+            <Text
+              className={`font-semibold ${
+                tab === "parties" ? "text-white" : "text-dark-400"
+              }`}
+            >
+              Parties
+            </Text>
+            {pendingInvites.length > 0 && (
+              <View className="bg-red-500 rounded-full w-5 h-5 items-center justify-center ml-1.5">
+                <Text className="text-white text-xs font-bold">
+                  {pendingInvites.length}
+                </Text>
+              </View>
+            )}
+          </View>
         </TouchableOpacity>
       </View>
 
@@ -257,6 +375,51 @@ export default function SocialScreen() {
               className="mb-4"
             />
 
+            {/* Pending Party Invitations */}
+            {pendingInvites.length > 0 && (
+              <>
+                <Text className="text-dark-300 text-sm font-semibold mb-2">
+                  Party Invitations
+                </Text>
+                {pendingInvites.map((inv: any) => (
+                  <Card key={inv.id} className="mb-2">
+                    <View className="flex-row items-center">
+                      <View className="flex-1">
+                        <Text className="text-white font-semibold">
+                          {inv.parties?.name || "Party"}
+                        </Text>
+                        <Text className="text-dark-400 text-xs">
+                          from {inv.inviter?.username || "Unknown"}
+                        </Text>
+                      </View>
+                      <TouchableOpacity
+                        onPress={() => handleAcceptInvite(inv.id)}
+                        className="bg-green-500/20 rounded-lg px-3 py-1.5 mr-2"
+                      >
+                        <Text className="text-green-400 font-semibold text-sm">
+                          Join
+                        </Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={() => handleDeclineInvite(inv.id)}
+                        className="bg-dark-700 rounded-lg px-3 py-1.5"
+                      >
+                        <Text className="text-dark-300 font-semibold text-sm">
+                          Decline
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  </Card>
+                ))}
+              </>
+            )}
+
+            {/* Active Parties */}
+            {activeParties.length > 0 && (
+              <Text className="text-dark-300 text-sm font-semibold mb-2 mt-2">
+                Active Parties
+              </Text>
+            )}
             {activeParties.map((p: any) => (
               <View key={p.party_id}>
                 <TouchableOpacity
@@ -268,28 +431,57 @@ export default function SocialScreen() {
                 >
                   <PartyCard
                     name={p.parties?.name || "Party"}
-                    memberCount={1}
+                    memberCount={p.parties?.party_members?.[0]?.count || 1}
                     isActive={p.parties?.is_active || false}
                     userScore={p.score}
                   />
                 </TouchableOpacity>
                 {selectedPartyId === p.party_id && (
                   <PartyDetail
+                    party={p.parties}
                     partyId={p.party_id}
                     currentUserId={user?.id || ""}
                     onEnd={() => handleEndParty(p.party_id)}
+                    onInvite={() => {
+                      setInvitePartyId(p.party_id);
+                      setInvitePartyName(p.parties?.name || "Party");
+                    }}
                   />
                 )}
               </View>
             ))}
 
-            {activeParties.length === 0 && (
+            {activeParties.length === 0 && pendingInvites.length === 0 && (
               <View className="items-center py-12">
                 <Ionicons name="trophy-outline" size={48} color="#334155" />
                 <Text className="text-dark-400 text-base mt-4">
                   No active parties. Create one to compete!
                 </Text>
               </View>
+            )}
+
+            {/* Party History */}
+            <Button
+              title={showHistory ? "Hide History" : "Past Parties"}
+              variant="ghost"
+              size="sm"
+              onPress={() => setShowHistory(!showHistory)}
+              className="mt-4 mb-2"
+            />
+            {showHistory &&
+              partyHistory.map((p: any) => (
+                <PartyCard
+                  key={p.party_id}
+                  name={p.parties?.name || "Party"}
+                  memberCount={1}
+                  isActive={false}
+                  userScore={p.score}
+                />
+              ))}
+            {showHistory && partyHistory.length === 0 && (
+              <Text className="text-dark-400 text-sm text-center py-4">
+                No past parties yet.
+              </Text>
             )}
           </>
         )}
@@ -333,6 +525,15 @@ export default function SocialScreen() {
           className="mt-2"
         />
       </Modal>
+
+      {/* Invite Friends Modal */}
+      <InviteModal
+        visible={invitePartyId !== null}
+        onClose={() => setInvitePartyId(null)}
+        friends={getInviteFriendsList()}
+        onInvite={handleInvite}
+        partyName={invitePartyName}
+      />
     </SafeAreaView>
   );
 }
