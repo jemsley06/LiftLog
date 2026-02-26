@@ -45,21 +45,15 @@ create policy "Users can send friend requests" on public.friends for insert with
 create policy "Users can update friend requests they received" on public.friends for update using (auth.uid() = addressee_id);
 create policy "Users can delete own friend requests" on public.friends for delete using (auth.uid() = requester_id or auth.uid() = addressee_id);
 
--- Parties: members can view, creator can update
-create policy "Party members can view parties" on public.parties for select using (
-  exists (select 1 from public.party_members where party_members.party_id = parties.id and party_members.user_id = auth.uid())
-);
+-- Parties: any authenticated user can view, creator can update
+create policy "Authenticated users can view parties" on public.parties for select using (auth.uid() is not null);
 create policy "Users can create parties" on public.parties for insert with check (auth.uid() = created_by);
 create policy "Party creator can update" on public.parties for update using (auth.uid() = created_by);
 
--- Party Members: members can view fellow members, users can join
-create policy "Party members can view members" on public.party_members for select using (
-  exists (select 1 from public.party_members pm where pm.party_id = party_members.party_id and pm.user_id = auth.uid())
-);
+-- Party Members: any authenticated user can view members, users can join/update own
+create policy "Authenticated users can view party members" on public.party_members for select using (auth.uid() is not null);
 create policy "Users can join parties" on public.party_members for insert with check (auth.uid() = user_id);
-create policy "Score updates by system" on public.party_members for update using (
-  exists (select 1 from public.party_members pm where pm.party_id = party_members.party_id and pm.user_id = auth.uid())
-);
+create policy "Users can update own party member record" on public.party_members for update using (auth.uid() = user_id);
 
 -- Enable realtime for party_members
 alter publication supabase_realtime add table public.party_members;
