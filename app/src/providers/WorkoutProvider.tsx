@@ -1,18 +1,18 @@
-import React, { createContext, useContext, useState, useCallback } from "react";
+import React, { createContext, useContext, useState, useCallback, useEffect } from "react";
 import {
   createWorkout,
   completeWorkout,
   logSet,
   updateSet,
   deleteSet,
-  getWorkoutSets,
+  getActiveWorkout,
 } from "../services/workouts";
 import { useAuth } from "./AuthProvider";
 
 interface ActiveWorkout {
   id: string;
   name: string | null;
-  startedAt: Date;
+  startedAt: number;
 }
 
 interface WorkoutContextType {
@@ -50,9 +50,24 @@ const WorkoutContext = createContext<WorkoutContextType>({
 
 export function WorkoutProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
-  const [activeWorkout, setActiveWorkout] = useState<ActiveWorkout | null>(
-    null
-  );
+  const [activeWorkout, setActiveWorkout] = useState<ActiveWorkout | null>(null);
+
+  // Restore active workout on mount / user change
+  useEffect(() => {
+    if (!user) {
+      setActiveWorkout(null);
+      return;
+    }
+    getActiveWorkout(user.id).then((workout) => {
+      if (workout) {
+        setActiveWorkout({
+          id: workout.id,
+          name: workout.name,
+          startedAt: workout.started_at,
+        });
+      }
+    });
+  }, [user?.id]);
 
   const startWorkout = useCallback(
     async (name?: string) => {
@@ -60,8 +75,8 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
       const workout = await createWorkout(user.id, name);
       setActiveWorkout({
         id: workout.id,
-        name: (workout as any).name,
-        startedAt: (workout as any).startedAt,
+        name: workout.name,
+        startedAt: workout.started_at,
       });
     },
     [user]
@@ -70,8 +85,10 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
   const finishWorkout = useCallback(
     async (notes?: string) => {
       if (!activeWorkout) return;
-      await completeWorkout(activeWorkout.id, notes);
-      setActiveWorkout(null);
+      const result = await completeWorkout(activeWorkout.id, notes);
+      if (result) {
+        setActiveWorkout(null);
+      }
     },
     [activeWorkout]
   );
