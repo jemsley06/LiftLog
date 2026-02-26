@@ -1,12 +1,17 @@
 import { useState, useEffect } from "react";
 import { getSetsForExercise } from "../services/workouts";
-import type SetModel from "../db/models/Set";
 
-/**
- * Fetch and cache past sets for a given exercise.
- */
+interface SetData {
+  id: string;
+  exercise_id: string;
+  weight: number;
+  reps: number;
+  calculated_1rm: number | null;
+  [key: string]: any;
+}
+
 export function useExerciseHistory(exerciseId: string | null) {
-  const [sets, setSets] = useState<SetModel[]>([]);
+  const [sets, setSets] = useState<SetData[]>([]);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -20,7 +25,7 @@ export function useExerciseHistory(exerciseId: string | null) {
 
     getSetsForExercise(exerciseId).then((data) => {
       if (!cancelled) {
-        setSets(data);
+        setSets(data as SetData[]);
         setLoading(false);
       }
     });
@@ -30,21 +35,14 @@ export function useExerciseHistory(exerciseId: string | null) {
     };
   }, [exerciseId]);
 
-  // Get the best set (highest 1RM)
-  const bestSet = sets.reduce<SetModel | null>((best, set) => {
-    if (!best || (set.calculated1RM || 0) > (best.calculated1RM || 0)) {
+  const bestSet = sets.reduce<SetData | null>((best, set) => {
+    if (!best || (set.calculated_1rm || 0) > (best.calculated_1rm || 0)) {
       return set;
     }
     return best;
   }, null);
 
-  // Get the most recent sets (last workout)
   const recentSets = sets.slice(0, 10);
 
-  return {
-    sets,
-    bestSet,
-    recentSets,
-    loading,
-  };
+  return { sets, bestSet, recentSets, loading };
 }

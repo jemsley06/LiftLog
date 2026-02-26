@@ -6,14 +6,16 @@ import {
   Platform,
   ScrollView,
   Alert,
+  TouchableOpacity,
 } from "react-native";
-import { Link, router } from "expo-router";
-import { useAuth } from "../../providers/AuthProvider";
-import Input from "../../components/ui/Input";
-import Button from "../../components/ui/Button";
-import { validateSignUp } from "../../utils/validation";
+import { useNavigation } from "@react-navigation/native";
+import { useAuth } from "../providers/AuthProvider";
+import Input from "../components/ui/Input";
+import Button from "../components/ui/Button";
+import { validateSignUp } from "../utils/validation";
 
-export default function SignUp() {
+export default function SignUpScreen() {
+  const navigation = useNavigation<any>();
   const { signUp } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -37,7 +39,7 @@ export default function SignUp() {
       Alert.alert(
         "Account Created",
         "Check your email to verify your account, then sign in.",
-        [{ text: "OK", onPress: () => router.replace("/(auth)/sign-in") }]
+        [{ text: "OK", onPress: () => navigation.goBack() }]
       );
     } catch (error: any) {
       Alert.alert("Sign Up Failed", error.message || "Please try again.");
@@ -56,7 +58,6 @@ export default function SignUp() {
         className="flex-1 bg-dark-900 px-6"
         keyboardShouldPersistTaps="handled"
       >
-        {/* Header */}
         <View className="items-center mb-10">
           <Text className="text-primary-400 text-5xl font-bold mb-2">
             LiftLog
@@ -66,7 +67,6 @@ export default function SignUp() {
           </Text>
         </View>
 
-        {/* Form */}
         <Input
           label="Username"
           placeholder="Choose a username"
@@ -108,11 +108,11 @@ export default function SignUp() {
           <Text className="text-dark-400 text-sm">
             Already have an account?{" "}
           </Text>
-          <Link href="/(auth)/sign-in">
+          <TouchableOpacity onPress={() => navigation.goBack()}>
             <Text className="text-primary-400 text-sm font-semibold">
               Sign In
             </Text>
-          </Link>
+          </TouchableOpacity>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>

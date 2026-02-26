@@ -1,13 +1,12 @@
 import React, { useState, useEffect } from "react";
 import { View, Text, ScrollView, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { useAuth } from "../../providers/AuthProvider";
-import { useNetworkStatus } from "../../hooks/useNetworkStatus";
-import { supabase } from "../../services/supabase";
-import Button from "../../components/ui/Button";
-import Card from "../../components/ui/Card";
+import { useAuth } from "../providers/AuthProvider";
+import { useNetworkStatus } from "../hooks/useNetworkStatus";
+import { supabase } from "../services/supabase";
+import Button from "../components/ui/Button";
+import Card from "../components/ui/Card";
 
 export default function ProfileScreen() {
   const { user, signOut } = useAuth();
@@ -42,7 +41,7 @@ export default function ProfileScreen() {
         onPress: async () => {
           try {
             await signOut();
-            router.replace("/(auth)/sign-in");
+            // Navigation handled automatically by RootNavigator auth state
           } catch (error: any) {
             Alert.alert("Error", error.message);
           }

@@ -9,16 +9,16 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { useAuth } from "../../providers/AuthProvider";
-import { useFriends } from "../../hooks/useFriends";
-import { useParty } from "../../hooks/useParty";
-import Button from "../../components/ui/Button";
-import Card from "../../components/ui/Card";
-import FriendCard from "../../components/social/FriendCard";
-import PartyCard from "../../components/social/PartyCard";
-import Leaderboard from "../../components/social/Leaderboard";
-import Modal from "../../components/ui/Modal";
-import Input from "../../components/ui/Input";
+import { useAuth } from "../providers/AuthProvider";
+import { useFriends } from "../hooks/useFriends";
+import { useParty } from "../hooks/useParty";
+import Button from "../components/ui/Button";
+import Card from "../components/ui/Card";
+import FriendCard from "../components/social/FriendCard";
+import PartyCard from "../components/social/PartyCard";
+import Leaderboard from "../components/social/Leaderboard";
+import Modal from "../components/ui/Modal";
+import Input from "../components/ui/Input";
 
 type Tab = "friends" | "parties";
 

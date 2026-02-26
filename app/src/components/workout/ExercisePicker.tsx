@@ -9,8 +9,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import Modal from "../ui/Modal";
 import Badge from "../ui/Badge";
-import { searchExercises, getAllExercises } from "../../services/exercises";
-import type Exercise from "../../db/models/Exercise";
+import { getAllExercises } from "../../services/exercises";
 
 interface ExercisePickerProps {
   visible: boolean;
@@ -33,7 +32,7 @@ export default function ExercisePicker({
   onClose,
   onSelect,
 }: ExercisePickerProps) {
-  const [exercises, setExercises] = useState<Exercise[]>([]);
+  const [exercises, setExercises] = useState<any[]>([]);
   const [query, setQuery] = useState("");
   const [selectedGroup, setSelectedGroup] = useState("All");
 
@@ -52,7 +51,7 @@ export default function ExercisePicker({
       !query || e.name.toLowerCase().includes(query.toLowerCase());
     const matchesGroup =
       selectedGroup === "All" ||
-      e.muscleGroup.toLowerCase() === selectedGroup.toLowerCase();
+      e.muscle_group.toLowerCase() === selectedGroup.toLowerCase();
     return matchesQuery && matchesGroup;
   });
 
@@ -102,7 +101,7 @@ export default function ExercisePicker({
               onSelect({
                 id: item.id,
                 name: item.name,
-                muscleGroup: item.muscleGroup,
+                muscleGroup: item.muscle_group,
               });
               onClose();
             }}
@@ -115,7 +114,7 @@ export default function ExercisePicker({
               </Text>
             </View>
             <Badge
-              label={item.muscleGroup}
+              label={item.muscle_group}
               variant="info"
               size="sm"
             />

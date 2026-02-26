@@ -6,15 +6,15 @@ import {
   Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useAuth } from "../../providers/AuthProvider";
-import { useWorkout } from "../../hooks/useWorkout";
-import { useNetworkStatus } from "../../hooks/useNetworkStatus";
-import Button from "../../components/ui/Button";
-import ExerciseCard from "../../components/workout/ExerciseCard";
-import ExercisePicker from "../../components/workout/ExercisePicker";
-import RestTimer from "../../components/workout/RestTimer";
+import { useAuth } from "../providers/AuthProvider";
+import { useWorkout } from "../hooks/useWorkout";
+import { useNetworkStatus } from "../hooks/useNetworkStatus";
+import Button from "../components/ui/Button";
+import ExerciseCard from "../components/workout/ExerciseCard";
+import ExercisePicker from "../components/workout/ExercisePicker";
+import RestTimer from "../components/workout/RestTimer";
 import { Ionicons } from "@expo/vector-icons";
-import { getAllExercises } from "../../services/exercises";
+import { getAllExercises } from "../services/exercises";
 
 interface SelectedExercise {
   id: string;
@@ -140,11 +140,11 @@ export default function HomeScreen() {
                 const setsForExercise = (exerciseSets[exercise.id] || []).map(
                   (s: any) => ({
                     id: s.id,
-                    setNumber: s.setNumber,
+                    setNumber: s.set_number,
                     weight: s.weight,
                     reps: s.reps,
                     rpe: s.rpe,
-                    calculated1RM: s.calculated1RM,
+                    calculated1RM: s.calculated_1rm,
                   })
                 );
 

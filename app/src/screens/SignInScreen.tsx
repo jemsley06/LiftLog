@@ -6,13 +6,15 @@ import {
   Platform,
   ScrollView,
   Alert,
+  TouchableOpacity,
 } from "react-native";
-import { Link, router } from "expo-router";
-import { useAuth } from "../../providers/AuthProvider";
-import Input from "../../components/ui/Input";
-import Button from "../../components/ui/Button";
+import { useNavigation } from "@react-navigation/native";
+import { useAuth } from "../providers/AuthProvider";
+import Input from "../components/ui/Input";
+import Button from "../components/ui/Button";
 
-export default function SignIn() {
+export default function SignInScreen() {
+  const navigation = useNavigation<any>();
   const { signIn } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -34,7 +36,7 @@ export default function SignIn() {
     setLoading(true);
     try {
       await signIn(email.trim(), password);
-      router.replace("/(tabs)/home");
+      // Navigation handled automatically by RootNavigator auth state
     } catch (error: any) {
       Alert.alert("Sign In Failed", error.message || "Please try again.");
     } finally {
@@ -52,7 +54,6 @@ export default function SignIn() {
         className="flex-1 bg-dark-900 px-6"
         keyboardShouldPersistTaps="handled"
       >
-        {/* Logo / Header */}
         <View className="items-center mb-10">
           <Text className="text-primary-400 text-5xl font-bold mb-2">
             LiftLog
@@ -62,7 +63,6 @@ export default function SignIn() {
           </Text>
         </View>
 
-        {/* Form */}
         <Input
           label="Email"
           placeholder="you@example.com"
@@ -94,11 +94,11 @@ export default function SignIn() {
           <Text className="text-dark-400 text-sm">
             Don't have an account?{" "}
           </Text>
-          <Link href="/(auth)/sign-up">
+          <TouchableOpacity onPress={() => navigation.navigate("SignUp")}>
             <Text className="text-primary-400 text-sm font-semibold">
               Sign Up
             </Text>
-          </Link>
+          </TouchableOpacity>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>

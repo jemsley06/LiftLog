@@ -1,23 +1,31 @@
-import { Q } from "@nozbe/watermelondb";
-import { database, Exercise } from "../db";
+import { database } from "../db";
 import { DEFAULT_EXERCISES } from "../constants/exercises";
 
-const exercisesCollection = database.get<Exercise>("exercises");
+interface ExerciseRecord {
+  id: string;
+  name: string;
+  muscle_group: string;
+  equipment: string;
+  is_custom: boolean;
+  created_by: string | null;
+  [key: string]: any;
+}
+
+const exercisesCol = database.get<ExerciseRecord>("exercises");
 
 export async function getAllExercises() {
-  return exercisesCollection.query().fetch();
+  return exercisesCol.query();
 }
 
 export async function getExercisesByMuscleGroup(muscleGroup: string) {
-  return exercisesCollection
-    .query(Q.where("muscle_group", muscleGroup))
-    .fetch();
+  return exercisesCol.query((e) => e.muscle_group === muscleGroup);
 }
 
 export async function searchExercises(query: string) {
   const lowerQuery = query.toLowerCase();
-  const all = await exercisesCollection.query().fetch();
-  return all.filter((e) => e.name.toLowerCase().includes(lowerQuery));
+  return exercisesCol.query((e) =>
+    e.name.toLowerCase().includes(lowerQuery)
+  );
 }
 
 export async function createCustomExercise(
@@ -26,53 +34,36 @@ export async function createCustomExercise(
   equipment: string,
   userId: string
 ) {
-  return database.write(async () => {
-    return exercisesCollection.create((e: any) => {
-      e.name = name;
-      e.muscleGroup = muscleGroup;
-      e.equipment = equipment;
-      e.isCustom = true;
-      e.createdBy = userId;
-    });
-  });
+  return exercisesCol.create({
+    name,
+    muscle_group: muscleGroup,
+    equipment,
+    is_custom: true,
+    created_by: userId,
+  } as any);
 }
 
 export async function deleteCustomExercise(exerciseId: string) {
-  return database.write(async () => {
-    const exercise = await exercisesCollection.find(exerciseId);
-    if (exercise.isCustom) {
-      await exercise.markAsDeleted();
-    }
-  });
+  const exercise = await exercisesCol.find(exerciseId);
+  if (exercise && exercise.is_custom) {
+    await exercisesCol.remove(exerciseId);
+  }
 }
 
 /**
  * Seed the local database with default exercises if they don't already exist.
  */
 export async function seedDefaultExercises() {
-  const existing = await exercisesCollection.query().fetchCount();
-  if (existing > 0) return; // Already seeded
+  const count = await exercisesCol.count();
+  if (count > 0) return;
 
-  await database.write(async () => {
-    const batch = DEFAULT_EXERCISES.map((ex) =>
-      exercisesCollection.prepareCreate((e: any) => {
-        e.name = ex.name;
-        e.muscleGroup = ex.muscleGroup;
-        e.equipment = ex.equipment;
-        e.isCustom = false;
-        e.createdBy = null;
-      })
-    );
-    await database.batch(...batch);
-  });
-}
-
-export function observeExercises() {
-  return exercisesCollection.query().observe();
-}
-
-export function observeExercisesByMuscleGroup(muscleGroup: string) {
-  return exercisesCollection
-    .query(Q.where("muscle_group", muscleGroup))
-    .observe();
+  await exercisesCol.batchCreate(
+    DEFAULT_EXERCISES.map((ex) => ({
+      name: ex.name,
+      muscle_group: ex.muscleGroup,
+      equipment: ex.equipment,
+      is_custom: false,
+      created_by: null,
+    })) as any[]
+  );
 }

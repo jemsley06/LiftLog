@@ -9,23 +9,21 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { useAuth } from "../../providers/AuthProvider";
-import { getWorkoutHistory, getWorkoutSets } from "../../services/workouts";
-import { getAllExercises } from "../../services/exercises";
-import { useProgressData } from "../../hooks/useProgressData";
-import WorkoutCard from "../../components/workout/WorkoutCard";
-import ProgressChart from "../../components/progress/ProgressChart";
-import Card from "../../components/ui/Card";
-import type Workout from "../../db/models/Workout";
-import type Exercise from "../../db/models/Exercise";
+import { useAuth } from "../providers/AuthProvider";
+import { getWorkoutHistory, getWorkoutSets } from "../services/workouts";
+import { getAllExercises } from "../services/exercises";
+import { useProgressData } from "../hooks/useProgressData";
+import WorkoutCard from "../components/workout/WorkoutCard";
+import ProgressChart from "../components/progress/ProgressChart";
+import Card from "../components/ui/Card";
 
 type ViewMode = "history" | "progress";
 
 export default function HistoryScreen() {
   const { user } = useAuth();
   const [viewMode, setViewMode] = useState<ViewMode>("history");
-  const [workouts, setWorkouts] = useState<Workout[]>([]);
-  const [exercises, setExercises] = useState<Exercise[]>([]);
+  const [workouts, setWorkouts] = useState<any[]>([]);
+  const [exercises, setExercises] = useState<any[]>([]);
   const [selectedExercise, setSelectedExercise] = useState<string | null>(null);
   const [workoutSetCounts, setWorkoutSetCounts] = useState<Record<string, { exercises: number; sets: number }>>({});
   const [refreshing, setRefreshing] = useState(false);
@@ -47,7 +45,7 @@ export default function HistoryScreen() {
       const counts: Record<string, { exercises: number; sets: number }> = {};
       for (const workout of workoutData.slice(0, 20)) {
         const sets = await getWorkoutSets(workout.id);
-        const uniqueExercises = new Set(sets.map((s: any) => s.exerciseId));
+        const uniqueExercises = new Set(sets.map((s: any) => s.exercise_id));
         counts[workout.id] = {
           exercises: uniqueExercises.size,
           sets: sets.length,
@@ -122,9 +120,9 @@ export default function HistoryScreen() {
             const counts = workoutSetCounts[item.id] || { exercises: 0, sets: 0 };
             return (
               <WorkoutCard
-                name={(item as any).name}
-                startedAt={(item as any).startedAt?.toISOString?.() || new Date().toISOString()}
-                completedAt={(item as any).completedAt?.toISOString?.() || null}
+                name={item.name}
+                startedAt={new Date(item.started_at).toISOString()}
+                completedAt={item.completed_at ? new Date(item.completed_at).toISOString() : null}
                 exerciseCount={counts.exercises}
                 setCount={counts.sets}
               />

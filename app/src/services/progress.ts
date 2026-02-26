@@ -1,9 +1,28 @@
-import { Q } from "@nozbe/watermelondb";
-import { database, SetModel, Workout } from "../db";
-import { calculate1RM, percentageChange, isPlateaued } from "../utils/calculations";
+import { database } from "../db";
+import { percentageChange, isPlateaued } from "../utils/calculations";
 
-const setsCollection = database.get<SetModel>("sets");
-const workoutsCollection = database.get<Workout>("workouts");
+interface SetRecord {
+  id: string;
+  workout_id: string;
+  exercise_id: string;
+  set_number: number;
+  weight: number;
+  reps: number;
+  rpe: number | null;
+  calculated_1rm: number | null;
+  [key: string]: any;
+}
+
+interface WorkoutRecord {
+  id: string;
+  user_id: string;
+  started_at: number;
+  completed_at: number | null;
+  [key: string]: any;
+}
+
+const setsCol = database.get<SetRecord>("sets");
+const workoutsCol = database.get<WorkoutRecord>("workouts");
 
 export interface ExerciseProgressPoint {
   date: Date;
@@ -24,53 +43,42 @@ export interface ExerciseStats {
   totalVolume: number;
 }
 
-/**
- * Get progress data points for a specific exercise over time.
- */
 export async function getExerciseProgress(
   exerciseId: string,
   userId: string
 ): Promise<ExerciseProgressPoint[]> {
-  const userWorkouts = await workoutsCollection
-    .query(
-      Q.where("user_id", userId),
-      Q.where("completed_at", Q.notEq(null)),
-      Q.sortBy("started_at", Q.asc)
-    )
-    .fetch();
+  const userWorkouts = await workoutsCol.query(
+    (w) => w.user_id === userId && w.completed_at !== null
+  );
+  userWorkouts.sort((a, b) => a.started_at - b.started_at);
 
-  const workoutIds = userWorkouts.map((w) => w.id);
-  if (workoutIds.length === 0) return [];
+  const workoutIds = new Set(userWorkouts.map((w) => w.id));
+  if (workoutIds.size === 0) return [];
 
-  const sets = await setsCollection
-    .query(
-      Q.where("exercise_id", exerciseId),
-      Q.where("workout_id", Q.oneOf(workoutIds))
-    )
-    .fetch();
+  const allSets = await setsCol.query(
+    (s) => s.exercise_id === exerciseId && workoutIds.has(s.workout_id)
+  );
 
-  // Group sets by workout
-  const setsByWorkout = new Map<string, SetModel[]>();
-  for (const set of sets) {
-    const existing = setsByWorkout.get(set.workoutId) || [];
+  const setsByWorkout = new Map<string, SetRecord[]>();
+  for (const set of allSets) {
+    const existing = setsByWorkout.get(set.workout_id) || [];
     existing.push(set);
-    setsByWorkout.set(set.workoutId, existing);
+    setsByWorkout.set(set.workout_id, existing);
   }
 
-  // Build progress points per workout
   const points: ExerciseProgressPoint[] = [];
   for (const workout of userWorkouts) {
     const workoutSets = setsByWorkout.get(workout.id);
     if (!workoutSets || workoutSets.length === 0) continue;
 
     const best = workoutSets.reduce((best, set) => {
-      const orm = set.calculated1RM || 0;
-      return orm > (best.calculated1RM || 0) ? set : best;
+      const orm = set.calculated_1rm || 0;
+      return orm > (best.calculated_1rm || 0) ? set : best;
     }, workoutSets[0]);
 
     points.push({
-      date: workout.startedAt,
-      best1RM: best.calculated1RM || 0,
+      date: new Date(workout.started_at),
+      best1RM: best.calculated_1rm || 0,
       bestWeight: best.weight,
       bestReps: best.reps,
       totalVolume: workoutSets.reduce((sum, s) => sum + s.weight * s.reps, 0),
@@ -80,58 +88,40 @@ export async function getExerciseProgress(
   return points;
 }
 
-/**
- * Get the user's best 1RM for a specific exercise.
- */
 export async function getBest1RM(exerciseId: string): Promise<number> {
-  const sets = await setsCollection
-    .query(
-      Q.where("exercise_id", exerciseId),
-      Q.sortBy("calculated_1rm", Q.desc),
-      Q.take(1)
-    )
-    .fetch();
-
-  return sets[0]?.calculated1RM || 0;
+  const allSets = await setsCol.query((s) => s.exercise_id === exerciseId);
+  if (allSets.length === 0) return 0;
+  return Math.max(...allSets.map((s) => s.calculated_1rm || 0));
 }
 
-/**
- * Get stats for all exercises in a completed workout.
- */
 export async function getWorkoutStats(
   workoutId: string,
   userId: string
 ): Promise<ExerciseStats[]> {
-  const sets = await setsCollection
-    .query(Q.where("workout_id", workoutId))
-    .fetch();
+  const allSets = await setsCol.query((s) => s.workout_id === workoutId);
+  const exercisesCol = database.get<any>("exercises");
 
-  // Group by exercise
-  const byExercise = new Map<string, SetModel[]>();
-  for (const set of sets) {
-    const existing = byExercise.get(set.exerciseId) || [];
+  const byExercise = new Map<string, SetRecord[]>();
+  for (const set of allSets) {
+    const existing = byExercise.get(set.exercise_id) || [];
     existing.push(set);
-    byExercise.set(set.exerciseId, existing);
+    byExercise.set(set.exercise_id, existing);
   }
 
   const stats: ExerciseStats[] = [];
-  const exercisesCollection = database.get("exercises");
 
   for (const [exerciseId, exerciseSets] of byExercise) {
-    const exercise = await exercisesCollection.find(exerciseId);
-
+    const exercise = await exercisesCol.find(exerciseId);
     const currentBest = Math.max(
-      ...exerciseSets.map((s) => s.calculated1RM || 0)
+      ...exerciseSets.map((s) => s.calculated_1rm || 0)
     );
 
-    // Get previous workout's best for this exercise
     const previousProgress = await getExerciseProgress(exerciseId, userId);
     const previousBest =
       previousProgress.length >= 2
         ? previousProgress[previousProgress.length - 2].best1RM
         : 0;
 
-    // Check plateau
     const recent1RMs = previousProgress
       .slice(-4)
       .reverse()
@@ -139,7 +129,7 @@ export async function getWorkoutStats(
 
     stats.push({
       exerciseId,
-      exerciseName: (exercise as any).name,
+      exerciseName: exercise?.name || "Unknown",
       currentBest1RM: currentBest,
       previousBest1RM: previousBest,
       change1RM: percentageChange(previousBest, currentBest),
