@@ -1,4 +1,5 @@
 # Project: LiftLog
+# Members: Jason Emsley, Nathaniel Kemme Nash
 **Vibe:** Aesthetic, modern, practical.
 **Tech Stack:** React Native, NativeWind, ExpoRouter, Supabase, WatermelonDB.
 
