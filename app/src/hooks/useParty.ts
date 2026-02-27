@@ -14,6 +14,7 @@ import {
   subscribeToPartyScores,
   subscribeToPartyStatus,
   subscribeToPartyInvites,
+  subscribeToPartyMembers,
 } from "../services/realtime";
 import { useAuth } from "../providers/AuthProvider";
 
@@ -90,6 +91,16 @@ export function useParty(partyId?: string) {
     });
     return unsubscribe;
   }, [partyId, refreshParties, refreshMembers]);
+
+  // Real-time party member changes (joins/leaves)
+  useEffect(() => {
+    if (!partyId) return;
+    const unsubscribe = subscribeToPartyMembers(partyId, () => {
+      refreshMembers();
+      refreshParties();
+    });
+    return unsubscribe;
+  }, [partyId, refreshMembers, refreshParties]);
 
   // Real-time invite notifications
   useEffect(() => {

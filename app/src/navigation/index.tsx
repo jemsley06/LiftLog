@@ -10,9 +10,11 @@ import SignUpScreen from "../screens/SignUpScreen";
 import HomeScreen from "../screens/HomeScreen";
 import HistoryScreen from "../screens/HistoryScreen";
 import SocialScreen from "../screens/SocialScreen";
+import PartyDetailScreen from "../screens/PartyDetailScreen";
 import ProfileScreen from "../screens/ProfileScreen";
 
 const AuthStack = createNativeStackNavigator();
+const SocialStack = createNativeStackNavigator();
 const Tabs = createBottomTabNavigator();
 
 function AuthNavigator() {
@@ -27,6 +29,21 @@ function AuthNavigator() {
       <AuthStack.Screen name="SignIn" component={SignInScreen} />
       <AuthStack.Screen name="SignUp" component={SignUpScreen} />
     </AuthStack.Navigator>
+  );
+}
+
+function SocialNavigator() {
+  return (
+    <SocialStack.Navigator
+      screenOptions={{
+        headerShown: false,
+        contentStyle: { backgroundColor: "#0F172A" },
+        animation: "slide_from_right",
+      }}
+    >
+      <SocialStack.Screen name="SocialHome" component={SocialScreen} />
+      <SocialStack.Screen name="PartyDetail" component={PartyDetailScreen} />
+    </SocialStack.Navigator>
   );
 }
 
@@ -73,7 +90,7 @@ function MainTabs() {
       />
       <Tabs.Screen
         name="Social"
-        component={SocialScreen}
+        component={SocialNavigator}
         options={{
           title: "Social",
           tabBarIcon: ({ color, size }) => (

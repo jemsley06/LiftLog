@@ -54,7 +54,8 @@ export function subscribeToPartyStatus(
 }
 
 /**
- * Subscribe to incoming friend requests.
+ * Subscribe to incoming friend requests and status changes.
+ * Listens for INSERT (new requests) and UPDATE (accept/decline) events.
  */
 export function subscribeToFriendRequests(
   userId: string,
@@ -72,6 +73,26 @@ export function subscribeToFriendRequests(
       },
       callback
     )
+    .on(
+      "postgres_changes",
+      {
+        event: "UPDATE",
+        schema: "public",
+        table: "friends",
+        filter: `addressee_id=eq.${userId}`,
+      },
+      callback
+    )
+    .on(
+      "postgres_changes",
+      {
+        event: "UPDATE",
+        schema: "public",
+        table: "friends",
+        filter: `requester_id=eq.${userId}`,
+      },
+      callback
+    )
     .subscribe();
 
   return () => {
@@ -80,7 +101,8 @@ export function subscribeToFriendRequests(
 }
 
 /**
- * Subscribe to incoming party invitations.
+ * Subscribe to incoming party invitations and status changes.
+ * Listens for INSERT (new invites) and UPDATE (accept/decline) events.
  */
 export function subscribeToPartyInvites(
   userId: string,
@@ -95,6 +117,52 @@ export function subscribeToPartyInvites(
         schema: "public",
         table: "party_invites",
         filter: `invited_user=eq.${userId}`,
+      },
+      callback
+    )
+    .on(
+      "postgres_changes",
+      {
+        event: "UPDATE",
+        schema: "public",
+        table: "party_invites",
+        filter: `invited_user=eq.${userId}`,
+      },
+      callback
+    )
+    .subscribe();
+
+  return () => {
+    supabase.removeChannel(channel);
+  };
+}
+
+/**
+ * Subscribe to party member changes (joins/leaves).
+ */
+export function subscribeToPartyMembers(
+  partyId: string,
+  callback: (payload: any) => void
+) {
+  const channel = supabase
+    .channel(`party-members-${partyId}`)
+    .on(
+      "postgres_changes",
+      {
+        event: "INSERT",
+        schema: "public",
+        table: "party_members",
+        filter: `party_id=eq.${partyId}`,
+      },
+      callback
+    )
+    .on(
+      "postgres_changes",
+      {
+        event: "DELETE",
+        schema: "public",
+        table: "party_members",
+        filter: `party_id=eq.${partyId}`,
       },
       callback
     )
